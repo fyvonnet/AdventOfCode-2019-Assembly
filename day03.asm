@@ -10,15 +10,10 @@ moves:	.byte	'L', -1,  0		# left
 
 	.section .bss
 	.balign	8
-	.set	COORDS_SIZE, 6*1024*1024
-	.type	coords, @object
-	.size	coords, COORDS_SIZE
-coords:	.zero	COORDS_SIZE
-	.set	SCHEM_SIZE, 256*1024*1024
-	.type	schem, @object
-	.size	schem, SCHEM_SIZE
-schem:	.zero	SCHEM_SIZE
-foobar:	.byte	0
+	.set	ARENA_SIZE, 8*1024*1024
+	.type	arena, @object
+	.size	arena, ARENA_SIZE
+arena:	.zero	ARENA_SIZE
 
 
 	.section .text
@@ -27,139 +22,31 @@ foobar:	.byte	0
 	.globl	_start
 	.type	_start, @function
 _start:
+	print_banner
 
 	call	timer_start
 	addi	sp, sp, -16
 	sd	a0, (sp)
+
+	la	a0, arena
+	li	a1, ARENA_SIZE
+	call	arena_init
+
+	la	a0, compar
+	la	a1, alloc	
+	call	redblacktree_init
+	mv	s0, a0
 	
+
 	la	a0, input
-	la	s0, coords
-	mv	s6, s0
-	addi	s0, s0, 16
-
-loop_wires:
-	# current coordinate
-	mv	s8, zero
-	mv	s9, zero
-
-loop_lines:
-	lb	t0, (a0)
-	inc	a0
-	la	s1, moves
-	# search for steps direction
-loop_dirs:
-	lb	t3, (s1)
-	beq	t0, t3, loop_dirs_end
-	addi	s1, s1, 3
-	j	loop_dirs
-loop_dirs_end:
-	# load steps moves
-	lb	s10, 1(s1)
-	lb	s11, 2(s1)
-
-	call	parse_integer
-	mv	s7, a1
-loop_steps:
-	add	s8, s8, s10
-	add	s9, s9, s11
-	sd 	s8, 0(s0)
-	sd	s9, 8(s0)
-	addi	s0, s0, 16
-	dec	s7
-	bnez	s7, loop_steps
-
-	li	t0, ','
-	lb	t1, (a0)
-	inc	a0
-	beq	t0, t1,loop_lines
-	
-	sd	s0, (s6)		# store end of wire's address
-	addi	s6, s6, 8
-
-	lb	t0, (a0)
-	bnez	t0, loop_wires
-	
-
-
-	# create array
-
-	la	t0, schem
-	li	t1, 2
-	sd	t1, 0(t0)
-	li	t1, 1
-	sd	t1, 8(t0)
-
-	la	t0, coords
-	addi	s0, t0, 16
-	ld	s11, 8(t0)		# load end second wire's adress
-
-loop_coords_bounds:
-	mv	s1, s0
-	la	s2, schem
-	addi	s2, s2, 16
-
-	.rept 2
-	ld	a0, 0(s1)
-	ld	a1, 0(s2)
-	call	min
-	sd	a0, 0(s2)
-
-	ld	a0, 0(s1)
-	ld	a1, 8(s2)
-	call	max
-
-	sd	a0, 8(s2)
-	addi	s1, s1, 8
-	addi	s2, s2, 16
-	.endr
-	
-	addi	s0, s0, 16
-	bne	s0, s11, loop_coords_bounds
-
-	la	a0, schem
-	call	array_init
-
-
-	# mark first wire on the schematic
-
-	la	t0, coords
-	addi	s0, t0, 16
-	li	s1, 1
-	ld	s11, 0(t0)				# load end of first wire
-loop_mark_wire:
-	la 	a0, schem
 	mv	a1, s0
-	call	array_addr
-	sb	s1, (a0)	
-	addi	s0, s0, 16
-	bne	s0, s11, loop_mark_wire
+	la	a2, first_wire
+	call	parse_wire
 
-
-
-	
-	# search for crossings
-
-	li	s1, -1
-	la	t0, coords
-	ld	s11, 8(t0)				# load end of second wire
-loop_search_crossings:
-	la 	a0, schem
 	mv	a1, s0
-	call	array_addr
-	lb	t0, (a0)
-	beqz	t0, skip_crossing
-	ld	a0, 0(s0)
-	call	abs
-	mv	s2, a0
-	ld	a0, 8(s0)
-	call	abs
-	add	s2, s2, a0
-	bgeu	s2, s1, skip_newmin
-	mv	s1, s2
-skip_newmin:
-skip_crossing:
-	addi	s0, s0, 16
-	blt	s0, s11, loop_search_crossings
+	la	a2, second_wire
+	call	parse_wire
+	mv	s1, a1
 
 	la	a0, ansp1
 	call	print_str
@@ -173,6 +60,170 @@ skip_crossing:
 	call	timer_stop
 	
 	
-end:
 	exit
 	.size	_start, .-_start
+
+	
+	# a0: tree
+	# a1: X
+	# a2: Y
+	# a3: pointer
+	.type	first_wire, @function
+first_wire:
+	addi	sp, sp, -64
+	sd	ra,  0(sp)
+
+	slli	a1, a1, 32
+	add	a1, a1, a2
+	call	redblacktree_insert
+
+	ld	ra,  0(sp)
+	addi	sp, sp, 64
+	ret
+	.size	first_wire, .-first_wire
+
+
+	# a0: tree
+	# a1: X
+	# a2: Y
+	# a3: pointer
+	.type	second_wire, @function
+second_wire:
+	addi	sp, sp, -64
+	sd	ra,  0(sp)
+	sd	s1,  8(sp)
+	sd	s2, 16(sp)
+	sd	s3, 24(sp)
+
+	mv	s1, a1
+	mv	s2, a2
+	mv	s3, a3
+
+	slli	a1, a1, 32
+	add	a1, a1, a2
+	call	redblacktree_search
+	beqz	a0, second_wire_ret
+
+	mv	a0, s1
+	call	abs
+	mv	s1, a0
+
+	mv	a0, s2
+	call	abs
+	add	a0, a0, s1
+
+	ld	t0, (s3)
+	bgeu	a0, t0, second_wire_ret
+stop_here:
+	sd	a0, (s3)
+
+second_wire_ret:
+	ld	ra,  0(sp)
+	ld	s1,  8(sp)
+	ld	s2, 16(sp)
+	ld	s3, 24(sp)
+	addi	sp, sp, 64
+	ret
+	.size	second_wire, .-first_wire
+
+
+	# a0: input
+	# a1: tree
+	# a2: function
+parse_wire:
+	addi	sp, sp, -96
+	sd	ra,  0(sp)
+	sd	s0,  8(sp)
+	sd	s1, 16(sp)
+	sd	s2, 24(sp)
+	sd	s3, 32(sp)
+	sd	s4, 40(sp)
+	sd	s5, 48(sp)
+	sd	s6, 56(sp)
+	sd	s7, 64(sp)
+	#sd	s8, 72(sp)
+	addi	sp, sp, -16
+
+	mv	s0, a0
+	mv	s1, a1
+	mv	s2, a2
+
+	li	t0, -1
+	sd	t0, (sp)
+
+	# current coordinate
+	mv	s4, zero
+	mv	s5, zero
+
+loop_lines:
+	lb	t0, (s0)
+	la	t1, moves
+	inc	s0
+	# search for steps direction
+loop_dirs:
+	lb	t3, (t1)
+	beq	t0, t3, loop_dirs_end
+	addi	t1, t1, 3
+	j	loop_dirs
+loop_dirs_end:
+	# load steps moves
+	lb	s6, 1(t1)
+	lb	s7, 2(t1)
+
+	mv	a0, s0
+	call	parse_integer
+	mv	s0, a0
+	mv	s3, a1
+loop_steps:
+	add	s4, s4, s6
+	add	s5, s5, s7
+	mv	a0, s1
+	mv	a1, s4
+	mv	a2, s5
+	mv	a3, sp
+	jalr	ra, s2
+	dec	s3
+	bnez	s3, loop_steps
+
+	li	t0, ','
+	lb	t1, (s0)
+	inc	s0
+	beq	t0, t1,loop_lines
+	
+	mv	a0, s0
+	ld	a1, (sp)
+
+	addi	sp, sp, 16
+	ld	ra,  0(sp)
+	ld	s0,  8(sp)
+	ld	s1, 16(sp)
+	ld	s2, 24(sp)
+	ld	s3, 32(sp)
+	ld	s4, 40(sp)
+	ld	s5, 48(sp)
+	ld	s6, 56(sp)
+	ld	s7, 64(sp)
+	#ld	s8, 72(sp)
+	addi	sp, sp, 96
+	ret
+	.size	parse_wire, .-parse_wire
+
+
+	.type	alloc, @function
+alloc:
+	addi	sp, sp, -16
+	sd	ra, (sp)
+	mv	a1, a0
+	la	a0, arena
+	call	arena_alloc
+	ld	ra, (sp)
+	addi	sp, sp, 16
+	ret
+	.size	alloc, .-alloc
+
+
+	.type	compar, @function
+compar:
+	sub	a0, a0, a1
+	ret
+	.size	compar, .-compar

@@ -6,8 +6,8 @@ day01: day01.o misc.o timer.o print.o common.inc
 day02: day02.o misc.o timer.o print.o memory.o redblacktree.o intcode.o common.inc 
 	ld -o day02 day02.o misc.o timer.o print.o memory.o redblacktree.o intcode.o
 
-day03:	day03.o misc.o timer.o print.o array.o common.inc
-	ld -o day03 day03.o misc.o timer.o print.o array.o
+day03:	day03.o misc.o timer.o print.o redblacktree.o memory.o common.inc
+	ld -o day03 day03.o misc.o timer.o print.o redblacktree.o memory.o
 
 day05: day05.o misc.o timer.o print.o memory.o redblacktree.o intcode.o common.inc 
 	ld -o day05 day05.o misc.o timer.o print.o memory.o redblacktree.o intcode.o
