@@ -27,7 +27,7 @@ _start:
 
 	la	a0, ansp1
 	call	print_str
-	li	a0, 2
+	li	a0, 1
 	call	foobar
 
 	la	a0, ansp2
@@ -47,8 +47,10 @@ foobar:
 	addi	sp, sp, -32
 	sd	ra,  0(sp)
 	sd	s0,  8(sp)
+	sd	s1, 16(sp)
+	sd	s2, 24(sp)
 
-	mv	s0, a0
+	mv	s1, a0
 
 	la	a0, arena
 	li	a1, ARENA_SIZE
@@ -58,14 +60,38 @@ foobar:
 	la	a1, alloc
 	la	a2, free
 	call	intcode_init
+	mv	s0, a0
 
-	mv	a1, s0
+	# initial run
 	call	intcode_run
+
+	# continue with input
+	mv	a0, s0
+	mv	a1, s1
+	call	intcode_run
+
+	mv	s2, a1
+
+	# loop and collect outputs until intcode stops running
+loop_foobar:
+	mv	a0, s0
+	call	intcode_run
+	beqz	a0, foobar_ret
+	mv	s2, a1
+	j	loop_foobar
+
+foobar_ret:
+	
+	mv	a0, s2
 	call	print_dec
 	call	print_ln
 
+stop_here:
+
 	ld	ra,  0(sp)
 	ld	s0,  8(sp)
+	ld	s1, 16(sp)
+	ld	s2, 24(sp)
 	addi	sp, sp, 32
 	ret
 	.size	foobar, .-foobar
