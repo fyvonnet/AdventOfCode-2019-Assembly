@@ -1,12 +1,14 @@
 	.include "common.inc"
 
 
-	.set	INTCODE_SIZE, 	40
+	.set	INTCODE_SIZE, 	56
 	.set	INTCODE_TREE, 	 0
 	.set	INTCODE_ALLOC, 	 8
 	.set	INTCODE_FREE, 	16
 	.set	INTCODE_INPUT, 	24
 	.set	INTCODE_OUTPUT, 32
+	.set	INTCODE_PC, 	40
+	.set	INTCODE_STAT, 	48
 
 	.set	INTEGER_SIZE, 	16
 	.set	INTEGER_ADDR, 	 0
@@ -62,6 +64,8 @@ intcode_init:
 
 	sd	s1, INTCODE_ALLOC(s5)
 	sd	s2, INTCODE_FREE(s5)
+	sd	x0, INTCODE_PC(s5)
+	sd	x0, INTCODE_STAT(s5)
 
 	# initialize binary tree
 	la	a0, intcode_compar
@@ -104,6 +108,7 @@ loop_load_input:
 	.size	intcode_init, .-intcode_init
 
 
+
 	# a0: intcode
 	# a1: input
 	.globl	intcode_run
@@ -121,8 +126,12 @@ intcode_run:
 	addi	sp, sp, -64
 
 	mv	s0, a0
-	clr	s1
+	ld	t0, INTCODE_STAT(s0)
+	beqz	t0, skip_input
+	#sd	x0, INTCODE_STAT(s0)
 	sd	a1, INTCODE_INPUT(s0)
+skip_input:
+	ld	s1, INTCODE_PC(s0)
 	li	s3, 10
 loop_run:
 	mv	s9, sp
@@ -149,9 +158,8 @@ loop_run:
 	li	t0, 8
 	beq	a0, t0, opcode_equals
 	li	t0, 99
-	beq	a0, t0, loop_run_end	
+	beq	a0, t0, opcode_end
 
-opcode_unknow:
 	# shouldn't reach here
 	mv	s0, a0
 	la	a0, wrong_opcode
@@ -198,6 +206,14 @@ opcode_mul:
 
 
 opcode_input:
+	ld	t0, INTCODE_STAT(s0)
+	bnez	t0, input_ready
+	sd	s1, INTCODE_PC(s0)
+	li	a0, 1
+	sd	a0, INTCODE_STAT(s0)
+	j	loop_run_end
+input_ready:
+	sd	x0, INTCODE_STAT(s0)
 	mv	a0, s0
 	addi	a1, s1, 1
 	call	intcode_peek
@@ -216,8 +232,13 @@ opcode_output:
 	mv	a0, s0
 	call	intcode_peek		# load value
 	sd	a0, INTCODE_OUTPUT(s0)
+	mv	a1, a0
+	li	a0, 2
 	addi	s1, s1, 2
-	j	loop_run
+	sd	s1, INTCODE_PC(s0)
+	li	t0, 2
+	sd	t0, INTCODE_STAT(s0)
+	j	loop_run_end
 
 opcode_jump_if_true:
 	loadparams 2
@@ -266,10 +287,13 @@ opcode_compare:
 	call	intcode_poke
 	inc	s1
 	j	loop_run
+
+opcode_end:
+	clr	a0
+	ld	a1, INTCODE_OUTPUT(s0)
 	
 
 loop_run_end:
-	ld	a0, INTCODE_OUTPUT(s0)
 	addi	sp, sp, 64
 	ld	ra,  0(sp)
 	ld	s0,  8(sp)
