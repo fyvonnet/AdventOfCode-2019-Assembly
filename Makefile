@@ -1,4 +1,4 @@
-all: day01 day02 day03 day04 day05 day06
+all: day01 day02 day03 day04 day05 day06 day07
 
 day01: day01.o misc.o timer.o print.o common.inc 
 	ld -o day01 day01.o misc.o timer.o print.o
@@ -17,6 +17,9 @@ day05: day05.o misc.o timer.o print.o memory.o redblacktree.o intcode.o common.i
 
 day06: day06.o misc.o timer.o print.o memory.o redblacktree.o queue.o common.inc 
 	ld -o day06 day06.o misc.o timer.o print.o memory.o redblacktree.o queue.o
+
+day07: day07.o misc.o timer.o print.o memory.o redblacktree.o intcode.o common.inc 
+	ld -o day07 day07.o misc.o timer.o print.o memory.o redblacktree.o intcode.o
 
 %.o: %.asm
 	as -g $< -o $@
